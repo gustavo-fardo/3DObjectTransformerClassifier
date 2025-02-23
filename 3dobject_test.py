@@ -1,12 +1,14 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = '0' 
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, models
 import keras
-import os
 import random
 from sklearn.metrics import classification_report, confusion_matrix
 import seaborn as sns
 import matplotlib.pyplot as plt
+import pandas as pd
 
 # Step 1: Preprocess the OFF file into a point cloud
 def read_off(file_path):
@@ -60,19 +62,27 @@ def load_and_test_model(model_path, data_path):
     predicted_classes = np.argmax(predictions, axis=1)
     
     # Calculate precision, recall, and F1-score
-    report = classification_report(test_labels, predicted_classes, target_names=label_dict.keys())
-    print("Classification Report:\n", report)
+    report = classification_report(test_labels, predicted_classes, target_names=label_dict.keys(), output_dict=True)
     
+    # Convert the classification report to a DataFrame
+    report_df = pd.DataFrame(report).transpose()
+    
+    # Save the classification report as a table
+    report_df.to_csv('results/classification_report.csv', index=True)
+
     # Compute confusion matrix
     cm = confusion_matrix(test_labels, predicted_classes)
     
-    # Plot confusion matrix
+    # Normalize confusion matrix
+    cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    
+    # Plot normalized confusion matrix
     plt.figure(figsize=(10, 7))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=label_dict.keys(), yticklabels=label_dict.keys())
+    sns.heatmap(cm_normalized, annot=True, fmt='.2f', cmap='Blues', xticklabels=label_dict.keys(), yticklabels=label_dict.keys())
     plt.xlabel('Predicted')
     plt.ylabel('True')
-    plt.title('Confusion Matrix')
-    plt.show()
+    plt.title('Normalized Confusion Matrix')
+    plt.savefig('results/normalized_confusion_matrix.png')
     
     # (Optional) Make predictions on the test set and visualize some samples
 
@@ -108,11 +118,11 @@ def load_and_test_model(model_path, data_path):
         ax.set_zlim([point_cloud[:, 2].min() - margin, point_cloud[:, 2].max() + margin])
         
         # Save the plot as a 2D render
-        plt.savefig(f'sample_{i}_render.png')
+        plt.savefig(f'samples_plot/sample_{i}_render.png')
         plt.close()
 
 # Define paths
-model_path = '3Dobjectransform.keras'  # Path to the saved model
+model_path = 'models/3Dobjectransform.keras'  # Path to the saved model
 data_path = 'ModelNet10/'  # Path to the dataset
 
 # Load the model and test on the test files

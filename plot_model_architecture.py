@@ -1,8 +1,23 @@
 import keras
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras import layers, models
+from keras import layers, models
 import tensorflow as tf
+from keras.utils import plot_model
+
+# Network input dimensions
+num_classes = 10
+num_points = 3*1024
+input_shape = (num_points, 3)  # Shape of the input layer (num_points, num_axis)
+embedding_dim = 128             # Expands the feature space from num_axis to embedding_dim (num_points, embedding_dim)
+rate=0.1
+
+# Transformer block size (total number of heads will be num_heads * num_layers)
+num_layers = 2                # Number of transformer blocks
+num_heads = 4                  # Number of attention heads
+
+# Feed forward network size
+ff_dim = 128                   # Hidden layer size in feed forward network inside transformer
 
 @keras.saving.register_keras_serializable()
 class EmbeddingBlock(layers.Layer):
@@ -37,7 +52,7 @@ class EmbeddingBlock(layers.Layer):
         inputs = keras.Input(shape=(None, self.embedding_dim))
         outputs = self.call(inputs)
         model = keras.Model(inputs, outputs)
-        keras.utils.plot_model(model, to_file=file_path, show_shapes=True, show_layer_names=True)
+        keras.utils.plot_model(model, to_file=file_path, show_shapes=True, show_layer_names=False)
 
 @keras.saving.register_keras_serializable()
 class PositionalEncodingLayer(layers.Layer):
@@ -110,4 +125,93 @@ class TransformerBlock(layers.Layer):
         inputs = keras.Input(shape=(None, self.embedding_dim))
         outputs = self.call(inputs)
         model = keras.Model(inputs, outputs)
-        keras.utils.plot_model(model, to_file=file_path, show_shapes=True, show_layer_names=True)
+        keras.utils.plot_model(model, to_file=file_path, show_shapes=True, show_layer_names=False)
+
+inputs = layers.Input(shape=input_shape)
+
+# Embedding block
+x = layers.Dense(embedding_dim, activation='relu')(inputs)
+x = layers.LayerNormalization()(x)
+x = PositionalEncodingLayer(embedding_dim)(x)
+
+# 2 Transformer blocks
+
+# Multi-head self-attention
+attn_output = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)(x, x)
+attn_output = layers.Dropout(rate)(attn_output)
+out1 = layers.LayerNormalization(epsilon=1e-6)(x + attn_output)
+# Feed-forward network
+ffn_output = layers.Dense(ff_dim, activation="relu")(out1)
+ffn_output = layers.Dense(embedding_dim)(ffn_output)
+ffn_output = layers.Dropout(rate)(ffn_output)
+x = layers.LayerNormalization(epsilon=1e-6)(out1 + ffn_output)
+
+# Multi-head self-attention
+attn_output = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)(x, x)
+attn_output = layers.Dropout(rate)(attn_output)
+out1 = layers.LayerNormalization(epsilon=1e-6)(x + attn_output)
+# Feed-forward network
+ffn_output = layers.Dense(ff_dim, activation="relu")(out1)
+ffn_output = layers.Dense(embedding_dim)(ffn_output)
+ffn_output = layers.Dropout(rate)(ffn_output)
+x = layers.LayerNormalization(epsilon=1e-6)(out1 + ffn_output)
+
+# Global pooling and output
+x = layers.GlobalAveragePooling1D()(x)
+x = layers.Dropout(0.1)(x)
+x = layers.Dense(20, activation="relu")(x)
+x = layers.Dropout(0.1)(x)
+outputs = layers.Dense(num_classes, activation="softmax")(x)
+
+model = models.Model(inputs, outputs)
+visualkeras.layered_view(model, draw_volume=True, to_file='output.png', spacing=10, legend=True, scale_xy=1.5, max_xy=500, one_dim_orientation='x', show_dimension=True) # write to disk
+
+plot_model(model, to_file='complete_model.png', 
+            show_shapes=True,
+            show_dtype=False,
+            show_layer_names=False,
+            rankdir="TB",
+            expand_nested=False,
+            dpi=200,
+            show_trainable=False
+)
+
+tb = TransformerBlock(embedding_dim, num_heads, ff_dim)
+tb.plot_model()
+
+eb = EmbeddingBlock(embedding_dim)
+eb.plot_model()
+
+def build_transformer_model(input_shape, num_classes, embedding_dim=64, num_heads=4, ff_dim=128, num_layers=2):
+    inputs = layers.Input(shape=input_shape)
+
+    # Embedding block
+    embedding_layer = EmbeddingBlock(embedding_dim=embedding_dim)
+    x = embedding_layer(inputs)
+
+    # Transformer blocks
+    transformer_block = TransformerBlock(embedding_dim, num_heads, ff_dim)
+    x = transformer_block(x)
+    x = transformer_block(x)
+
+    # Global pooling and output
+    x = layers.GlobalAveragePooling1D()(x)
+    x = layers.Dropout(0.1)(x)
+    x = layers.Dense(20, activation="relu")(x)
+    x = layers.Dropout(0.1)(x)
+    outputs = layers.Dense(num_classes, activation="softmax")(x)
+
+    model = models.Model(inputs, outputs)
+    return model
+
+model = build_transformer_model(input_shape, num_classes, embedding_dim, num_heads, ff_dim, num_layers)
+
+plot_model(model, to_file='short_plot_model.png', 
+            show_shapes=True,
+            show_dtype=False,
+            show_layer_names=False,
+            rankdir="TB",
+            expand_nested=False,
+            dpi=200,
+            show_trainable=False
+)

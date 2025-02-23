@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import tensorflow as tf
 
 # Encoding of the labels into integers
 label_dict = { 'bathtub': 0, 
@@ -13,7 +14,7 @@ label_dict = { 'bathtub': 0,
                 'table': 8, 
                 'toilet': 9}
 # Number of vertices taken from every OFF file (number of features extracted)
-num_points = 1024
+num_points = 3*1024
 
 # Extract every single vertex from the OFF file, endcoded as in XYZ coordinates
 # Returns a (num_vertices, 3)
@@ -65,5 +66,30 @@ def load_off_files(data_path):
     return (
         np.array(train_point_clouds), np.array(train_labels),
         np.array(test_point_clouds), np.array(test_labels),
+        label_dict
+    )
+
+def get_dataset(data_path, batch_size=32, val_split=0.1):
+    x_train, y_train, x_test, y_test, label_dict = load_off_files(data_path)
+
+    # Normalize the data
+    x_train = x_train.astype("float32") / 255
+    x_test = x_test.astype("float32") / 255
+    y_train = y_train.astype("float32")
+    y_test = y_test.astype("float32")
+
+    # Calculate the number of validation samples
+    num_val_samples = int(len(x_train) * val_split)
+
+    # Reserve num_val_samples samples for validation
+    x_val = x_train[-num_val_samples:]
+    y_val = y_train[-num_val_samples:]
+    x_train = x_train[:-num_val_samples]
+    y_train = y_train[:-num_val_samples]
+
+    return (
+        tf.data.Dataset.from_tensor_slices((x_train, y_train)).batch(batch_size),
+        tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(batch_size),
+        tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(batch_size),
         label_dict
     )
