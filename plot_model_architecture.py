@@ -4,12 +4,13 @@ import tensorflow as tf
 from keras import layers, models
 import tensorflow as tf
 from keras.utils import plot_model
+import visualkeras
 
 # Network input dimensions
 num_classes = 10
 num_points = 3*1024
 input_shape = (num_points, 3)  # Shape of the input layer (num_points, num_axis)
-embedding_dim = 128             # Expands the feature space from num_axis to embedding_dim (num_points, embedding_dim)
+embedding_dim = 64             # Expands the feature space from num_axis to embedding_dim (num_points, embedding_dim)
 rate=0.1
 
 # Transformer block size (total number of heads will be num_heads * num_layers)

@@ -6,6 +6,7 @@ from tensorflow.keras import layers, models
 from tensorflow.python.client import device_lib
 from tensorflow.keras.utils import plot_model
 import random
+import matplotlib.pyplot as plt
 
 from process_data import read_off, preprocess_point_cloud, num_points
 
@@ -13,17 +14,17 @@ from process_data import read_off, preprocess_point_cloud, num_points
 
 # Network input dimensions
 input_shape = (num_points, 3)  # Shape of the input layer (num_points, num_axis)
-embedding_dim = 128             # Expands the feature space from num_axis to embedding_dim (num_points, embedding_dim)
+embedding_dim = 64             # Expands the feature space from num_axis to embedding_dim (num_points, embedding_dim)
 
 # Transformer block size (total number of heads will be num_heads * num_layers)
 num_layers = 2                # Number of transformer blocks
-num_heads = 4                  # Number of attention heads
+num_heads = 4                 # Number of attention heads
 
 # Feed forward network size
-ff_dim = 128                   # Hidden layer size in feed forward network inside transformer
+ff_dim = 2*embedding_dim                  # Hidden layer size in feed forward network inside transformer
 
 # Training parameters
-epochs = 60
+epochs = 50
 batch_size = int(128/(2*num_points/1024))  # Batch size is scaled by the number of points in the point cloud
 
 # ----------------------------------------------
@@ -75,15 +76,8 @@ train_point_clouds = np.expand_dims(train_point_clouds, axis=-1)
 test_point_clouds = np.expand_dims(test_point_clouds, axis=-1)
 
 # Build and compile the model
-
-# Create a MirroredStrategy for multiple GPUs
-strategy = tf.distribute.MirroredStrategy()
-print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-
-# Open a strategy scope for multiple GPUs
-with strategy.scope():
-    model = build_transformer_model(input_shape=input_shape, num_classes=len(label_dict), embedding_dim=embedding_dim, num_heads=num_heads, ff_dim=ff_dim, num_layers=num_layers)
-    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+model = build_transformer_model(input_shape=input_shape, num_classes=len(label_dict), embedding_dim=embedding_dim, num_heads=num_heads, ff_dim=ff_dim, num_layers=num_layers)
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
 # Display the model architecture
 # plot_model(model, to_file='model_plot.png', show_shapes=True, show_layer_names=True)
@@ -91,6 +85,16 @@ model.summary()
 
 # Train the model
 history = model.fit(train_point_clouds, train_labels, epochs=epochs, batch_size=batch_size)
+
+# Plot training
+plt.figure(figsize=(12, 6))
+plt.plot(history.history['accuracy'], label='Train Accuracy')
+plt.plot(history.history['loss'], label='Train Loss')
+plt.title('Model Accuracy and Loss')
+plt.ylabel('Value')
+plt.xlabel('Epoch')
+plt.legend(loc='upper left')
+plt.savefig('training_plot.png')
 
 # Evaluate the model on the test set
 test_loss, test_accuracy = model.evaluate(test_point_clouds, test_labels)

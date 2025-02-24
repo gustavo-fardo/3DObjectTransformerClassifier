@@ -80,7 +80,7 @@ class PositionalEncodingLayer(layers.Layer):
 
 @keras.saving.register_keras_serializable()
 class TransformerBlock(layers.Layer):
-    def __init__(self, embedding_dim, num_heads, ff_dim, rate=0.1, **kwargs):
+    def __init__(self, embedding_dim, num_heads, ff_dim, rate=0.3, **kwargs):
         super().__init__(**kwargs)
         self.embedding_dim = embedding_dim
         self.num_heads = num_heads
